@@ -88,28 +88,30 @@ export class CalloutSuggest extends AdmonitionOrCalloutSuggester {
         evt: MouseEvent | KeyboardEvent
     ): void {
         if (!this.context) return;
+        const editor = this.context.editor;
+        const triggerEnd = this.context.end;
+        const line = editor.getLine(triggerEnd.line);
+        
+        // Use regex to match and replace the entire relevant part
+        const match = this.testAndReturnQuery(line, triggerEnd);
+        if (!match) return;
 
-        const line = this.context.editor
-            .getLine(this.context.end.line)
-            .slice(this.context.end.ch);
-        const [_, exists] = line.match(/^(\] ?)/) ?? [];
+        // Define the range to replace
+        const matchStart = match.index; 
+        const matchLength = match[0].length;
+        const startPosition = {line: triggerEnd.line, ch:matchStart + this.offset}  // starting at ">[!"
+        const endPosition = {line: triggerEnd.line, ch:matchStart + matchLength}    // Up to the last matched character
 
-        this.context.editor.replaceRange(
+        editor.replaceRange(
             `${text}] `,
-            this.context.start,
-            {
-                ...this.context.end,
-                ch:
-                    this.context.start.ch +
-                    this.context.query.length +
-                    (exists?.length ?? 0)
-            },
+            startPosition,
+            endPosition,
             "admonitions"
         );
 
-        this.context.editor.setCursor(
+        editor.setCursor(
             this.context.start.line,
-            this.context.start.ch + text.length + 2
+            startPosition.ch + text.length +2
         );
 
         this.close();
@@ -120,7 +122,13 @@ export class CalloutSuggest extends AdmonitionOrCalloutSuggester {
     ): RegExpMatchArray | null {
         if (/> ?\[!\w+\]/.test(line.slice(0, cursor.ch))) return null;
         if (!/> ?\[!\w*/.test(line)) return null;
-        return line.match(/> ?\[!(\w*)\]?/);
+        else {
+            // Adjust offset: 4 if space after ">["; otherwise, 3 (e.g., >[!).
+            // The offset depends on whether there is a space between ">[" or not. 
+            const match = line.match(/> ?\[! *(\w*) *\]? ?/);
+            this.offset = (/> /.test(line)) ? 4 : 3;
+            return match;
+        }
     }
 }
 export class AdmonitionSuggest extends AdmonitionOrCalloutSuggester {
