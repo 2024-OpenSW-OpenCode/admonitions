@@ -82,7 +82,7 @@ abstract class AdmonitionOrCalloutSuggester extends EditorSuggest<
 }
 
 export class CalloutSuggest extends AdmonitionOrCalloutSuggester {
-    offset = 4;
+    offset = 3;
     selectSuggestion(
         [text]: [text: string, item: Admonition],
         evt: MouseEvent | KeyboardEvent
@@ -90,12 +90,20 @@ export class CalloutSuggest extends AdmonitionOrCalloutSuggester {
         if (!this.context) return;
 
         const line = this.context.editor
-            .getLine(this.context.end.line)
-            .slice(this.context.end.ch);
-        const [_, exists] = line.match(/^(\] ?)/) ?? [];
+            .getLine(this.context.end.line) // 한 줄을 다 가져옴
+            .slice(this.context.end.ch); // 커서 이후의 텍스트를 잘라서 확인
+        const [, exists] = line.match(/^(\]?)/) ?? [];
+
+        // 공백이 있을 시 띄워쓰기 시 괄호가 하나 더 생기는 문제 발생, 따라서 앞에 공백이 있는지 없는지 여부를 먼저 판단
+        // 공백이  없을 경우에는 기존 코드 유지
+        // 위 문제를 해결 시 띄워쓰기를 했을 때 앞에 !가 사라지는 문제 발생
+        // 따라서 조건문을 통해 띄워썼을 때와  공백이 없을 때를 구분해서 분류
+        
+        const hasSpace = /> \[!\w*/.test(this.context.editor.getLine(this.context.start.line)); 
+        const prefix = "!";
 
         this.context.editor.replaceRange(
-            `${text}] `,
+            hasSpace ? `${prefix}${text}` : `${text}]`,
             this.context.start,
             {
                 ...this.context.end,
@@ -118,8 +126,9 @@ export class CalloutSuggest extends AdmonitionOrCalloutSuggester {
         line: string,
         cursor: EditorPosition
     ): RegExpMatchArray | null {
-        if (/> ?\[!\w+\]/.test(line.slice(0, cursor.ch))) return null;
-        if (!/> ?\[!\w*/.test(line)) return null;
+        if (/> ?\[!\w+\]/.test(line.slice(0, cursor.ch))) return null; // 자동완성 항목을 띄우는 부분
+        if (!/> ?\[!\w*/.test(line)) return null; // 
+
         return line.match(/> ?\[!(\w*)\]?/);
     }
 }
